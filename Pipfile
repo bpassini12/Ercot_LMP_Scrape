@@ -1,0 +1,20 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+requests = "*"
+pandas = "*"
+jupyterlab = "*"
+pywin32 = "==225"
+scrapy = "*"
+beautifulsoup4 = "*"
+xlrd = "*"
+openpyxl = "*"
+plotly = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.8"
