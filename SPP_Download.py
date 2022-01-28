@@ -93,8 +93,8 @@ def delete_rows(db_file, delete_sql):
     conn.close()
     
     
-def check_max_date():
-    conn = create_connection(r'C:\Users\BPassini\Databases_Py\Ercot_SPP\LMP_DB.db')
+def check_max_date(db_file):
+    conn = create_connection(db_file)
     max_date_df = pd.read_sql_query('''Select max(DELIVERY_DATE) as MAX_DELIVERY_DATE,  max(DELIVERY_HOUR) as MAX_DELIVERY_HOUR 
                                        from ercot_hist_spp 
                                        where delivery_date = (select max(delivery_date) from ercot_hist_spp where settlement_point_price is not null)''', conn)
@@ -107,7 +107,7 @@ def check_max_date():
 
 try:
     #get max date of data in db
-    max_date, max_hour = check_max_date()
+    max_date, max_hour = check_max_date(lmp_db)
     max_year = max_date.year
     max_mon = max_date.month
     max_day = max_date.day
@@ -116,8 +116,10 @@ try:
 
     if max_mon == 12 and max_day == 31 and max_hour == 24:
         min_file_year = max_year + 1
+        min_file_mon = 1
     else:
         min_file_year = max_year
+        min_file_mon = max_mon
 
 
     #Get websites HTML, get all the filename and associated links
@@ -217,7 +219,7 @@ try:
             file_path = os.path.join(os.getcwd(),  'LMP_Zips', file)
             wb = xl.load_workbook(file_path, read_only=True)
             for sheet in wb.sheetnames:
-                if revs_mon_dict.get(str(sheet[0:3]).upper())>= max_mon:
+                if revs_mon_dict.get(str(sheet[0:3]).upper())>= min_file_mon:
                     data = wb[sheet].values
                     columns = next(data)[0:]
                     upload_sheet = pd.DataFrame(data, columns=columns)
@@ -235,7 +237,7 @@ try:
                         start_date_list.append(min_del_date)
                         end_date_list.append(max_del_date)
 
-
+    conn.execute("VACUUM")
     conn.close()
     
     email_dict = {'file':file_list, 'month': month_list, 'start_date': start_date_list, 'end_date':end_date_list}
@@ -244,7 +246,7 @@ try:
     
     
 except Exception as e:
-    send_email(email_subject = 'ERCOT SSP Scrape - ' + today + ' - FAILED', email_contents='An error occured during the Eroct SSP Scraping Process: /n' + logging.error(traceback.format_exc()))
+    send_email(email_subject = 'ERCOT SPP Scrape - ' + today + ' - FAILED', email_contents='An error occured during the Eroct SPP Scraping Process: /n' + logging.error(traceback.format_exc()))
     
 else:
-     send_email(email_subject = 'ERCOT SSP Scrape - ' + today, email_contents=email_df)
+     send_email(email_subject = 'ERCOT SPP Scrape - ' + today, email_contents=email_df)
