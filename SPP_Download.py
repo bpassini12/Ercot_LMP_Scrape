@@ -4,9 +4,7 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import re
 import pickle
-from zipfile import ZipFile
 import datetime 
-import openpyxl as xl
 import yagmail
 from cryptography.fernet import Fernet
 import traceback
@@ -206,7 +204,7 @@ try:
 
         file_year = int(file[-9:-5])
 
-        if '.xlsx' in file and file_year >= min_file_year:
+        if  file_year >= min_file_year:
             file_path = os.path.join(os.getcwd(),  'SPP_Zips', file)
             sheet_list = get_sheet_list(file_path, file_year)
             upload_df = pd.concat(pd.read_excel(file_path, sheet_name=sheet_list), ignore_index=True)
