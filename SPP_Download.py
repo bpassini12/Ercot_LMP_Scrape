@@ -92,7 +92,21 @@ sql_create_spp_table = ''' Create Table if not exists ercot_hist_spp (
                                     SETTLEMENT_POINT_PRICE real);
                                 '''
 
-bp.create_table(spp_db, sql_create_spp_table)
+sql_create_spp_tbl_index = '''Create index IF NOT EXISTS index_dd_ercot_hist_spp on ercot_hist_spp (DELIVERY_DATE)'''
+
+sql_create_spp_view = ''' Create View if not exists ercot_avg_spp as
+                                Select DELIVERY_DATE, DELIVERY_HOUR, SETTLEMENT_POINT_NAME, SETTLEMENT_POINT_TYPE, AVG(SETTLEMENT_POINT_PRICE) as SETTLEMENT_POINT_PRICE 
+                                from ercot_hist_spp 
+                                group by DELIVERY_DATE, DELIVERY_HOUR, SETTLEMENT_POINT_NAME, SETTLEMENT_POINT_TYPE
+                                ;
+                                '''
+
+
+#create tbl and view if they dont exist
+create_list = [sql_create_spp_table, sql_create_spp_tbl_index, sql_create_spp_view]
+for c in create_list:
+    bp.create_table(spp_db, c)
+
 
 
 try:
