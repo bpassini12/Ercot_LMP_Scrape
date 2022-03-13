@@ -190,7 +190,7 @@ try:
 
     #extracts the xlsx from each zip and places in same directory
     for file in [j for j in os.listdir(zip_path) if '.zip' in j]:
-            with ZipFile(zip_path + '/' + file, 'r') as zipObj:
+            with zipfile.ZipFile(zip_path + '/' + file, 'r') as zipObj:
                 zipObj.extractall(path=zip_path)
 
 
