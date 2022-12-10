@@ -1,3 +1,4 @@
+# %%
 import requests
 import os
 from bs4 import BeautifulSoup
@@ -12,7 +13,22 @@ import logging
 import bp_sql as bp
 import zipfile
 import time
+import html5lib
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 
+options = Options()
+
+#example: prefs = {"download.default_directory" : "C:\Tutorial\down"};
+
+
+options.headless = True
+
+from pyvirtualdisplay import Display
+display = Display(visible=0, size=(800, 800))  
+display.start()
+
+# %%
 script_start_time = time.time()
 
 today = datetime.date.today().strftime("%Y-%m-%d")
@@ -20,23 +36,31 @@ today = datetime.date.today().strftime("%Y-%m-%d")
 #DB path
 spp_db = 'SPP.db'
 
+zip_fldr = 'SPP_Zips'
+
+cwd = os.getcwd()
+
 #zip folder path
-zip_path = os.path.join(os.getcwd(),  'SPP_Zips')
+zip_fldr_path = os.path.join(cwd,  zip_fldr)
+
+prefs = {"download.default_directory" : zip_fldr_path}
+options.add_experimental_option("prefs",prefs)
 
 #contents of zip folder path
-zip_list = os.listdir(os.path.join(os.getcwd(),  'SPP_Zips'))
+zip_list = os.listdir(os.path.join(cwd, zip_fldr))
 
 #used for saving files
 save_folder = 'SPP_Zips/'
 
 #Website and file type to download
-Domain = 'http://mis.ercot.com'
-url = 'http://mis.ercot.com/misapp/GetReports.do?reportTypeId=13061&reportTitle=Historical%20RTM%20Load%20Zone%20and%20Hub%20Prices&showHTMLView=&mimicKey'
+Domain = 'http://ercot.com'
+url = 'https://www.ercot.com/mp/data-products/data-product-details?id=NP6-785-ER'
 filetype = 'zip'
 
 mon_dict = {1:'JAN', 2:'FEB', 3:'MAR', 4:'APR', 5:'MAY', 6:'JUN', 7:'JUL', 8:'AUG', 9:'SEP', 10:'OCT', 11:'NOV', 12:'DEC'}
 revs_mon_dict = dict([(value, key) for key, value in mon_dict.items()])
 
+# %%
 def get_credentials():
     key_path = os.path.join(os.path.expanduser('~'), '.fernet')
     key = pickle.load(open(key_path, 'rb'))
@@ -50,6 +74,7 @@ def get_credentials():
     gmail_pwd = cipher_suite.decrypt(str.encode(gmail_pwd_encrypt)).decode('utf-8')
     
     return gmail_user, gmail_pwd
+
 
 def send_email(email_subject, email_contents):
     gmail_user, gmail_pwd = get_credentials()
@@ -81,7 +106,7 @@ def get_sheet_list(file:str, year:int):
     return sheet_list 
     
 
-
+# %%
 sql_create_spp_table = ''' Create Table if not exists ercot_hist_spp (
                                     DELIVERY_DATE text,
                                     DELIVERY_HOUR integer,
@@ -101,18 +126,17 @@ sql_create_spp_view = ''' Create View if not exists ercot_avg_spp as
                                 ;
                                 '''
 
-
+# %%
 #create tbl and view if they dont exist
 create_list = [sql_create_spp_table, sql_create_spp_tbl_index, sql_create_spp_view]
 for c in create_list:
     bp.create_table(spp_db, c)
 
-
-
+# %%
 try:
     #get max date of data in db
     max_date, max_hour = check_max_date(spp_db)
-    
+
     if None not in (max_date, max_hour):
         max_year = max_date.year
         max_mon = max_date.month
@@ -131,69 +155,54 @@ try:
         min_file_year = max_year
         min_file_mon = max_mon
 
-
     #Get websites HTML, get all the filename and associated links
-    soup = BeautifulSoup(requests.get(url).text, 'html.parser')
-    file_list = soup.find_all(class_='labelOptional_ind')
+    driver = webdriver.Chrome(chrome_options=options)
+    driver.get(url)
+
+    html = driver.page_source
+    soup = BeautifulSoup(html)
+
+    file_list = soup.find_all(class_='name')
+    friendly_list = [f.next_element for f in file_list]
+    long_name_list = [f['title'] for f in file_list]
     link_list = soup.findAll('a', attrs={'href': re.compile("/misdownload/")}) 
+    link_list = [f['href'] for f in link_list]
+
+    website_file_df = pd.DataFrame(zip(friendly_list, long_name_list, link_list), columns=['web_friendly_name','web_long_name','web_link'])  
 
 
-    #Slim down the information in the previous list and put them into new lists
+    website_file_df['web_file_yr'] = website_file_df.web_friendly_name.apply(lambda x: int(x[-4:]))
+    website_file_df['web_file_date'] = website_file_df.web_long_name.apply(lambda x: pd.to_datetime(x.split('.')[3]))
 
-    link_name_list = []
 
-    for link in link_list:
-        link_name_list.append(link.get('href'))
+    zip_list_df = pd.DataFrame(zip_list, columns=['fldr_filename'])
+    zip_list_df['fdr_friendly_name'] = zip_list_df.fldr_filename.apply(lambda x: x.split('.')[3])
 
-    folder_name_list = []    
-
-    for class_ in file_list:
-        folder_name_list.append(str(class_.next_element))
+    merge_df = website_file_df.merge(zip_list_df,how='outer',left_on='web_friendly_name', right_on='fdr_friendly_name')
 
 
 
+    #Download necessary zips
+    for i, r in merge_df[~merge_df.web_long_name.isna()].iterrows():
 
-    #create a df of filename and links 
-    data_dict = {'ZipFolderName':folder_name_list, 'DownLoadLink':link_name_list}
-    dl_zip_df = pd.DataFrame(data_dict)
-    dl_zip_df['ZipFolderYear'] = dl_zip_df.ZipFolderName.str.split('.').str[5].str[-4:]
-    dl_zip_df['ZipFolderYear'] = dl_zip_df['ZipFolderYear'].astype(int)
-    dl_zip_df['ZipFolderDate'] = dl_zip_df.ZipFolderName.str.split('.').str[3]
-    dl_zip_df['ZipFolderDate'] = dl_zip_df['ZipFolderDate'].astype(int)
+        # zip_path = os.path.join(cwd,  zip_fldr, r['web_long_name'])
 
-    zip_list_df = []
-    zip_list_df = pd.DataFrame(zip_list, columns=['filename'])
-    zip_list_df['filetype'] = zip_list_df.filename.str.split('.').str[-1]
-    zip_list_df = zip_list_df[zip_list_df['filetype']=='zip']
-    zip_list_df['filedate'] = zip_list_df.filename.str.split('.').str[3]
-    zip_list_df['fileyear'] = zip_list_df.filename.str.split('.').str[5].str[-4:]
-    zip_list_df['fileyear'] = zip_list_df['fileyear'].astype(int)
-    zip_list_df['filedate'] = zip_list_df['filedate'].astype(int)
-
-    join_df = zip_list_df.merge(dl_zip_df, how='outer', left_on='filedate', right_on='ZipFolderDate')
-    join_df.reset_index(drop=True, inplace=True)
-    join_df.fillna(int(0), inplace=True)
-    new_max_file_date = max(join_df['ZipFolderDate'])
-
-
-    #dl_zip_df Download each zip from df that hasn't been downloaded already and save to specific folder in wd
-    for i in range(len(join_df)):
-        #download new zip and delete any old zips
-        if (join_df['ZipFolderDate'][i]>join_df['filedate'][i]) and (join_df['ZipFolderYear'][i]>= min_file_year):
-            with open(save_folder + join_df['ZipFolderName'][i], 'wb') as file:
-                response = requests.get(Domain + join_df['DownLoadLink'][i])
+        #download new zip
+        if (r['web_file_date']>max_date and r['web_file_yr']>= min_file_year):
+            with open(save_folder + r['web_long_name'], 'wb') as file:
+                response = requests.get(r['web_link'])
                 file.write(response.content)
 
-        elif 0 < join_df['filedate'][i] < new_max_file_date:
-            os.remove(os.path.join(os.getcwd(),  'SPP_Zips', join_df['filename'][i]))
-
+    driver.quit()
 
     #extracts the xlsx from each zip and places in same directory
-    for file in [j for j in os.listdir(zip_path) if '.zip' in j]:
-            with zipfile.ZipFile(zip_path + '/' + file, 'r') as zipObj:
-                zipObj.extractall(path=zip_path)
+    z_list = [j for j in os.listdir(zip_fldr_path) if '.zip' in j]
 
-
+    #removes zips after extracting excel
+    for file in z_list:
+        with zipfile.ZipFile(zip_fldr_path + '/' + file, 'r') as zipObj:
+            zipObj.extractall(path=zip_fldr_path)
+            os.remove(os.path.join(zip_fldr_path, file))
 
     bp.delete_rows(spp_db, delete_sql='''delete from ercot_hist_spp where settlement_point_price is null''')
 
@@ -201,25 +210,23 @@ try:
     file_list, month_list, start_date_list, end_date_list, time_list  = ([] for i in range(5))
 
     column_dict = {'Delivery Date':'DELIVERY_DATE'
-                   , 'Delivery Hour':'DELIVERY_HOUR'
-                   ,'Delivery Interval':'DELIVERY_INTERVAL'
-                   ,'Repeated Hour Flag':'REPEATED_HOUR_FLAG'
-                   ,'Settlement Point Name':'SETTLEMENT_POINT_NAME'
-                   ,'Settlement Point Type':'SETTLEMENT_POINT_TYPE'
-                   ,'Settlement Point Price':'SETTLEMENT_POINT_PRICE'}
-
-
+                    , 'Delivery Hour':'DELIVERY_HOUR'
+                    ,'Delivery Interval':'DELIVERY_INTERVAL'
+                    ,'Repeated Hour Flag':'REPEATED_HOUR_FLAG'
+                    ,'Settlement Point Name':'SETTLEMENT_POINT_NAME'
+                    ,'Settlement Point Type':'SETTLEMENT_POINT_TYPE'
+                    ,'Settlement Point Price':'SETTLEMENT_POINT_PRICE'}
 
     conn = bp.create_connection(spp_db)
 
     get_new_data_start_time = time.time()
-     
-    for file in [f for f  in sorted(os.listdir(os.path.join(os.getcwd(),  'SPP_Zips'))) if '.xlsx' in f]:
+        
+    for file in [f for f  in sorted(os.listdir(zip_fldr_path)) if '.xlsx' in f]:
 
         file_year = int(file[-9:-5])
 
         if  file_year >= min_file_year:
-            file_path = os.path.join(os.getcwd(),  'SPP_Zips', file)
+            file_path = os.path.join(zip_fldr_path, file)
             sheet_list = get_sheet_list(file_path, file_year)
             upload_df = pd.concat(pd.read_excel(file_path, sheet_name=sheet_list), ignore_index=True)
             upload_df.dropna(inplace=True)
@@ -239,12 +246,10 @@ try:
 
     bp.vacuum_db(spp_db)
     conn.close()
-    
+
     email_dict = {'file':file_list, 'start_date': start_date_list, 'end_date':end_date_list, 'loop_duration': time_list}
     email_df = pd.DataFrame(email_dict)
-    
 
-    
 except Exception as e:
     send_email(email_subject = 'ERCOT SPP Scrape - ' + today + ' - FAILED', email_contents='An error occured during the Eroct SPP Scraping Process: /n' + logging.error(traceback.format_exc()))
     
@@ -253,3 +258,5 @@ else:
     total_script_time = str(datetime.timedelta(seconds=total_script_time))
     print(total_script_time)
     send_email(email_subject = 'ERCOT SPP Scrape - ' + today, email_contents=['Script Time (Secs): '+ str(total_script_time) + '\n\n', email_df])
+
+
