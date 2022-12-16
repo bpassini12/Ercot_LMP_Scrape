@@ -24,8 +24,6 @@ from pyvirtualdisplay import Display
 display = Display(visible=0, size=(800, 800))  
 display.start()
 
-prefs = {"download.default_directory" : zip_fldr_path}
-options.add_experimental_option("prefs",prefs)
 
 # %% [markdown]
 # ## Set Up dates and folders
@@ -47,6 +45,10 @@ zip_fldr_path = os.path.join(cwd,  zip_fldr)
 
 #contents of zip folder path
 zip_list = os.listdir(os.path.join(cwd, zip_fldr))
+
+#some kind of chromdriver option idk if necessary
+prefs = {"download.default_directory" : zip_fldr_path}
+options.add_experimental_option("prefs",prefs)
 
 #Website and file type to download
 Domain = 'http://ercot.com'
@@ -172,7 +174,7 @@ try:
     driver.get(url)
 
     html = driver.page_source
-    soup = BeautifulSoup(html)
+    soup = BeautifulSoup(html, 'xml')
 
     file_list = soup.find_all(class_='name')
     friendly_list = [f.next_element for f in file_list]
