@@ -174,7 +174,7 @@ try:
     driver.get(url)
 
     html = driver.page_source
-    soup = BeautifulSoup(html)
+    soup = BeautifulSoup(html,features='lxml')
 
     file_list = soup.find_all(class_='name')
     friendly_list = [f.next_element for f in file_list]
