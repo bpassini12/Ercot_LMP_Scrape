@@ -18,11 +18,11 @@ import time
 #for chrome driver
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-options = Options()
-options.headless = True
+# options = Options()
+# options.headless = True
 from pyvirtualdisplay import Display
-display = Display(visible=0, size=(800, 800))  
-display.start()
+# display = Display(visible=0, size=(800, 800))  
+# display.start()
 
 
 
@@ -45,10 +45,13 @@ cwd = os.getcwd()
 zip_fldr_path = os.path.join(cwd,  zip_fldr)
 
 #contents of zip folder path
+if not os.path.exists(zip_fldr_path):
+    os.makedirs(zip_fldr_path)
+ 
 zip_list = os.listdir(os.path.join(cwd, zip_fldr))
 
 prefs = {"download.default_directory" : zip_fldr_path}
-options.add_experimental_option("prefs",prefs)
+#options.add_experimental_option("prefs",prefs)
 
 #Website and file type to download
 Domain = 'http://ercot.com'
@@ -157,7 +160,7 @@ try:
         max_day = max_date.day
     else:
         max_year, max_mon, max_day = 2000, 1 , 1
-        max_date = date(max_year, max_mon, max_day).strftime("%m/%d/%y")
+        max_date = datetime.datetime(max_year, max_mon, max_day).strftime("%m/%d/%y")
         
 
     max_mon_abrv = mon_dict.get(max_mon)
@@ -170,7 +173,7 @@ try:
         min_file_mon = max_mon
 
     #Get websites HTML, get all the filename and associated links
-    driver = webdriver.Chrome(chrome_options=options)
+    driver = webdriver.Chrome()
     driver.get(url)
 
     html = driver.page_source
@@ -200,7 +203,7 @@ try:
     for i, r in merge_df[~merge_df.web_long_name.isna()].iterrows():
 
         #download new zip
-        if (r['web_file_date']>max_date and r['web_file_yr']>= min_file_year):
+        if (r['web_file_date']>pd.to_datetime(max_date) and r['web_file_yr']>= min_file_year):
             with open(os.path.join(zip_fldr_path, r['web_long_name']), 'wb') as file:
                 response = requests.get(r['web_link'])
                 file.write(response.content)
