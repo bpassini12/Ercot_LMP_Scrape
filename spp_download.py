@@ -17,9 +17,12 @@ import time
 
 #for chrome driver
 from selenium import webdriver
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 options = Options()
 options.add_argument('--headless')
+servico = Service()
 from pyvirtualdisplay import Display
 # display = Display(visible=0, size=(800, 800))  
 # display.start()
@@ -57,7 +60,20 @@ prefs = {"download.default_directory" : zip_fldr_path}
 Domain = 'http://ercot.com'
 url = 'https://www.ercot.com/mp/data-products/data-product-details?id=NP6-785-ER'
 
-mon_dict = {1:'JAN', 2:'FEB', 3:'MAR', 4:'APR', 5:'MAY', 6:'JUN', 7:'JUL', 8:'AUG', 9:'SEP', 10:'OCT', 11:'NOV', 12:'DEC'}
+mon_dict = {1:'JAN'
+          , 2:'FEB'
+          , 3:'MAR'
+          , 4:'APR'
+          , 5:'MAY'
+          , 6:'JUN'
+          , 7:'JUL'
+          , 8:'AUG'
+          , 9:'SEP'
+          , 10:'OCT'
+          , 11:'NOV'
+          , 12:'DEC'
+          }
+
 revs_mon_dict = dict([(value, key) for key, value in mon_dict.items()])
 
 # %% [markdown]
@@ -133,6 +149,8 @@ sql_create_spp_table = ''' Create Table if not exists ercot_hist_spp (
                                 '''
 
 sql_create_spp_tbl_index = '''Create index IF NOT EXISTS index_dd_ercot_hist_spp on ercot_hist_spp (DELIVERY_DATE)'''
+sql_create_spp_hr_tbl_index = '''Create index IF NOT EXISTS index_hr_ercot_hist_spp on ercot_hist_spp (DELIVERY_HOUR)'''
+
 
 sql_create_spp_view = ''' Create View if not exists ercot_avg_spp as
                                 Select DELIVERY_DATE, DELIVERY_HOUR, SETTLEMENT_POINT_NAME, SETTLEMENT_POINT_TYPE, AVG(SETTLEMENT_POINT_PRICE) as SETTLEMENT_POINT_PRICE 
@@ -142,7 +160,7 @@ sql_create_spp_view = ''' Create View if not exists ercot_avg_spp as
                                 '''
 
 #create tbl and view if they dont exist
-create_list = [sql_create_spp_table, sql_create_spp_tbl_index, sql_create_spp_view]
+create_list = [sql_create_spp_table, sql_create_spp_tbl_index,sql_create_spp_hr_tbl_index, sql_create_spp_view]
 for c in create_list:
     bp.create_table(spp_db, c)
 
@@ -173,7 +191,7 @@ try:
         min_file_mon = max_mon
 
     #Get websites HTML, get all the filename and associated links
-    driver = webdriver.Chrome()
+    driver = webdriver.Chrome(service=servico, options=options)
     driver.get(url)
 
     html = driver.page_source
