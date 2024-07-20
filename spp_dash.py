@@ -26,7 +26,7 @@ color_mapping = {
     'LZ_HOUSTON': 'orange',
     'LZ_NORTH': 'blue',
     'LZ_WEST': 'red',
-    'LZ_SOUTH': 'purple'
+    'LZ_SOUTH': 'green'
 }
 # %%
 # Get unique years in the dataset

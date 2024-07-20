@@ -191,7 +191,9 @@ try:
         min_file_mon = max_mon
 
     #Get websites HTML, get all the filename and associated links
-    driver = webdriver.Chrome(service=servico, options=options)
+   # Set up Selenium WebDriver with WebDriver Manager
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service)
     driver.get(url)
 
     html = driver.page_source
